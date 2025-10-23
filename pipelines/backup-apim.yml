@@ -1,0 +1,179 @@
+#
+# This pipeline extracts (backs up) Azure API Management configurations
+# to the repository for version control and disaster recovery purposes.
+#
+# Based on Azure/apiops project patterns
+#
+
+name: Backup APIM Configuration
+
+trigger: none # Manual trigger only
+
+parameters:
+  - name: apimServiceName
+    displayName: 'APIM Service Name'
+    type: string
+    default: ''
+  - name: resourceGroupName
+    displayName: 'Resource Group Name'
+    type: string
+    default: ''
+  - name: artifactsFolderPath
+    displayName: 'Artifacts Folder Path'
+    type: string
+    default: 'artifacts'
+  - name: commitMessage
+    displayName: 'Commit Message'
+    type: string
+    default: 'Backup APIM configurations'
+  - name: createPullRequest
+    displayName: 'Create Pull Request'
+    type: boolean
+    default: true
+
+variables:
+  - name: apiops_release_version
+    value: 'v5.1.3'  # Update to latest version as needed
+  - name: vmImage
+    value: 'ubuntu-latest'
+
+pool:
+  vmImage: $(vmImage)
+
+stages:
+  - stage: Extract
+    displayName: 'Extract APIM Configurations'
+    jobs:
+      - job: ExtractAPIM
+        displayName: 'Extract APIM'
+        steps:
+          - checkout: self
+            persistCredentials: true
+            
+          - task: AzureCLI@2
+            displayName: 'Azure Login Check'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                echo "Checking Azure connection..."
+                az account show
+
+          - task: PowerShell@2
+            displayName: 'Download Extractor'
+            inputs:
+              targetType: 'inline'
+              script: |
+                # Download the extractor tool from the GitHub release
+                $extractorUrl = "https://github.com/Azure/apiops/releases/download/$(apiops_release_version)/extractor-linux-x64.zip"
+                Write-Host "Downloading extractor from: $extractorUrl"
+                
+                Invoke-WebRequest -Uri $extractorUrl -OutFile "extractor.zip"
+                Expand-Archive -Path "extractor.zip" -DestinationPath "$(Agent.TempDirectory)/extractor" -Force
+                
+                # Make the extractor executable
+                chmod +x "$(Agent.TempDirectory)/extractor/extractor"
+                
+                # Verify download
+                ls -la "$(Agent.TempDirectory)/extractor/"
+
+          - task: AzureCLI@2
+            displayName: 'Extract APIM Configurations'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Set environment variables for the extractor
+                export API_MANAGEMENT_SERVICE_NAME="${{ parameters.apimServiceName }}"
+                export RESOURCE_GROUP_NAME="${{ parameters.resourceGroupName }}"
+                export API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH="$(System.DefaultWorkingDirectory)/${{ parameters.artifactsFolderPath }}"
+                export AZURE_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+                export AZURE_TENANT_ID="$(az account show --query tenantId -o tsv)"
+                export AZURE_CLIENT_ID="$servicePrincipalId"
+                export AZURE_CLIENT_SECRET="$servicePrincipalKey"
+                
+                echo "Extracting from APIM Service: $API_MANAGEMENT_SERVICE_NAME"
+                echo "Resource Group: $RESOURCE_GROUP_NAME"
+                echo "Output Path: $API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH"
+                
+                # Create output directory
+                mkdir -p "$API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH"
+                
+                # Run the extractor
+                "$(Agent.TempDirectory)/extractor/extractor"
+                
+                # Show extracted files
+                echo "Extracted files:"
+                find "$API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH" -type f -name "*.json" -o -name "*.xml" -o -name "*.yaml" | head -20
+
+          - task: PowerShell@2
+            displayName: 'Prepare Git Changes'
+            inputs:
+              targetType: 'inline'
+              script: |
+                # Configure Git
+                git config user.email "apiops@company.com"
+                git config user.name "APIOps Backup"
+                
+                # Create branch if creating PR
+                if ("${{ parameters.createPullRequest }}" -eq "True") {
+                    $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+                    $branchName = "backup/apim-$timestamp"
+                    git checkout -b $branchName
+                    Write-Host "##vso[task.setvariable variable=branchName]$branchName"
+                }
+                
+                # Add changes
+                git add .
+                
+                # Check if there are changes
+                $changes = git status --porcelain
+                if ($changes) {
+                    Write-Host "Changes detected:"
+                    Write-Host $changes
+                    Write-Host "##vso[task.setvariable variable=hasChanges]true"
+                } else {
+                    Write-Host "No changes detected"
+                    Write-Host "##vso[task.setvariable variable=hasChanges]false"
+                }
+
+          - task: PowerShell@2
+            displayName: 'Commit and Push Changes'
+            condition: eq(variables['hasChanges'], 'true')
+            inputs:
+              targetType: 'inline'
+              script: |
+                # Commit changes
+                git commit -m "${{ parameters.commitMessage }}"
+                
+                if ("${{ parameters.createPullRequest }}" -eq "True") {
+                    # Push to new branch
+                    git push origin $(branchName)
+                    Write-Host "Changes pushed to branch: $(branchName)"
+                    Write-Host "##[section]Please create a Pull Request to merge the backup"
+                } else {
+                    # Push directly to main branch
+                    git push origin HEAD:main
+                    Write-Host "Changes pushed directly to main branch"
+                }
+
+          - task: PowerShell@2
+            displayName: 'Create Pull Request'
+            condition: and(eq(variables['hasChanges'], 'true'), eq('${{ parameters.createPullRequest }}', 'True'))
+            inputs:
+              targetType: 'inline'
+              script: |
+                Write-Host "##[section]Pull Request Information"
+                Write-Host "Branch: $(branchName)"
+                Write-Host "Title: ${{ parameters.commitMessage }}"
+                Write-Host "Description: Automated backup of APIM configurations from ${{ parameters.apimServiceName }}"
+                Write-Host ""
+                Write-Host "##[warning]Please create a Pull Request manually in Azure DevOps:"
+                Write-Host "1. Go to Repos > Pull Requests"
+                Write-Host "2. Click 'New Pull Request'"
+                Write-Host "3. Select source branch: $(branchName)"
+                Write-Host "4. Select target branch: main"
+                Write-Host "5. Add title and description"
+                Write-Host "6. Create the Pull Request"

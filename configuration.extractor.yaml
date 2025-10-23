@@ -1,0 +1,50 @@
+# Sample extractor configuration
+# This file can be used to extract only specific resources from APIM
+# Useful for team-based workflows or selective backups
+
+# Specify which APIs to extract (optional - if not specified, all APIs are extracted)
+apiNames:
+  - api-name-1
+  - api-name-2
+  # Add more API names as needed
+
+# Specify which products to extract (optional)
+productNames:
+  - product-1
+  - product-2
+
+# Specify which backends to extract (optional)
+backendNames:
+  - backend-service-1
+  - backend-service-2
+
+# Specify which named values to extract (optional)
+namedValueNames:
+  - named-value-1
+  - named-value-2
+
+# Specify which policy fragments to extract (optional)
+policyFragmentNames:
+  - fragment-1
+  - fragment-2
+
+# Specify which tags to extract (optional)
+tagNames:
+  - tag-1
+  - tag-2
+
+# Specify which loggers to extract (optional)
+loggerNames:
+  - logger-1
+  - logger-2
+
+# Additional options
+options:
+  # Include service-level policies
+  includeServicePolicies: true
+  
+  # Include diagnostics
+  includeDiagnostics: true
+  
+  # Include subscriptions
+  includeSubscriptions: true

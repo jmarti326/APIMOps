@@ -1,0 +1,33 @@
+# Configuration file for production environment
+# This file overrides default values when restoring to prod environment
+
+apimServiceName: your-apim-prod
+resourceGroupName: rg-apim-prod
+
+# Environment-specific named values
+namedValues:
+  - name: environment
+    value: prod
+  - name: api-base-url
+    value: https://api.yourdomain.com
+  - name: database-connection
+    value: "Server=prod-sql.database.windows.net;Database=proddb;"
+
+# Environment-specific backend services
+backends:
+  - name: user-service
+    url: https://user-api.yourdomain.com
+  - name: order-service
+    url: https://order-api.yourdomain.com
+  - name: payment-service
+    url: https://payment-api.yourdomain.com
+
+# Environment-specific policies (if needed)
+policies:
+  # Add any environment-specific policy overrides here
+  rateLimiting:
+    requestsPerMinute: 10000
+  cors:
+    allowedOrigins:
+      - https://yourdomain.com
+      - https://www.yourdomain.com

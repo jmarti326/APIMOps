@@ -1,0 +1,33 @@
+# Configuration file for development environment
+# This file overrides default values when restoring to dev environment
+
+apimServiceName: your-apim-dev
+resourceGroupName: rg-apim-dev
+
+# Environment-specific named values
+namedValues:
+  - name: environment
+    value: dev
+  - name: api-base-url
+    value: https://api-dev.yourdomain.com
+  - name: database-connection
+    value: "Server=dev-sql.database.windows.net;Database=devdb;"
+
+# Environment-specific backend services
+backends:
+  - name: user-service
+    url: https://user-api-dev.yourdomain.com
+  - name: order-service  
+    url: https://order-api-dev.yourdomain.com
+  - name: payment-service
+    url: https://payment-api-dev.yourdomain.com
+
+# Environment-specific policies (if needed)
+policies:
+  # Add any environment-specific policy overrides here
+  rateLimiting:
+    requestsPerMinute: 1000
+  cors:
+    allowedOrigins:
+      - https://dev.yourdomain.com
+      - http://localhost:3000

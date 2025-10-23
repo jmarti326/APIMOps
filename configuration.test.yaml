@@ -1,0 +1,33 @@
+# Configuration file for test environment
+# This file overrides default values when restoring to test environment
+
+apimServiceName: your-apim-test
+resourceGroupName: rg-apim-test
+
+# Environment-specific named values
+namedValues:
+  - name: environment
+    value: test
+  - name: api-base-url
+    value: https://api-test.yourdomain.com
+  - name: database-connection
+    value: "Server=test-sql.database.windows.net;Database=testdb;"
+
+# Environment-specific backend services
+backends:
+  - name: user-service
+    url: https://user-api-test.yourdomain.com
+  - name: order-service
+    url: https://order-api-test.yourdomain.com
+  - name: payment-service
+    url: https://payment-api-test.yourdomain.com
+
+# Environment-specific policies (if needed)
+policies:
+  # Add any environment-specific policy overrides here
+  rateLimiting:
+    requestsPerMinute: 5000
+  cors:
+    allowedOrigins:
+      - https://test.yourdomain.com
+      - http://localhost:3000
